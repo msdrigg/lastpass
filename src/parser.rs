@@ -1,6 +1,6 @@
 use crate::{
-    keys::{DecryptionError, DecryptionKey, PrivateKey},
-    Account, App, Attachment, Field, Share, Vault,
+    keys::{DecryptionKey, PrivateKey},
+    Account, App, Attachment, DecryptionError, Field, Share, Vault,
 };
 use byteorder::{BigEndian, ByteOrder};
 use std::{
@@ -8,6 +8,8 @@ use std::{
     convert::TryInto,
     error::Error,
     fmt::{self, Debug, Formatter},
+    fs::File,
+    io::Write,
     str::{FromStr, Utf8Error},
 };
 use url::Url;
@@ -18,6 +20,14 @@ pub(crate) fn parse(
     private_key: &PrivateKey,
 ) -> Result<Vault, VaultParseError> {
     let mut parser = Parser::new();
+
+    {
+        // Write raw to file here
+        let mut file = File::create("vault.bin").unwrap();
+        // Write a slice of bytes to the file
+        file.write_all(raw).unwrap();
+        println!("DECRYPTION KEY: {:?}", decryption_key);
+    }
 
     parser.parse(raw, decryption_key, private_key)?;
 
@@ -116,6 +126,8 @@ impl Parser {
                 chunk.data.len()
             ),
         }
+
+        println!("Chunk name: {:?}", std::str::from_utf8(chunk.name));
 
         match chunk.name {
             // vault version
@@ -584,15 +596,19 @@ mod tests {
         0x4C, 0x50, 0x41, 0x56, 0x00, 0x00, 0x00, 0x03, 0x31, 0x39, 0x38,
     ];
 
-    fn keys() -> (DecryptionKey, PrivateKey) {
+    const RAW_KEY_01: &str =
+        "08c9bb2d9b48b39efb774e3fef32a38cb0d46c5c6c75f7f9d65259bfd374e120";
+
+    const RAW_KEY_02: &str =
+        "5440251a4ca70b772efba80ab4372e973ee00a8a2340f22b48f5efb569565d4b";
+
+    fn keys(raw_key: &str) -> (DecryptionKey, PrivateKey) {
         // this is the decryption key used for the
         // `vault_from_dummy_account.bin` vault. Having it in git isn't
         // really a security concern because that's a dummy account and
         // the password has since been changed.
-        let raw =
-            "08c9bb2d9b48b39efb774e3fef32a38cb0d46c5c6c75f7f9d65259bfd374e120";
         let mut buffer = [0; DecryptionKey::LEN];
-        hex::decode_to_slice(raw, &mut buffer).unwrap();
+        hex::decode_to_slice(raw_key, &mut buffer).unwrap();
         let decryption_key = DecryptionKey::from_raw(buffer);
 
         let private_key = PrivateKey::new(Vec::new());
@@ -627,7 +643,7 @@ mod tests {
                 .unwrap();
             buffer.write_all(chunk.data).unwrap();
         }
-        let (decryption_key, private_key) = keys();
+        let (decryption_key, private_key) = keys(RAW_KEY_01);
         let mut parser = Parser::new();
 
         parser
@@ -638,7 +654,7 @@ mod tests {
     }
 
     #[test]
-    fn read_the_dummy_vault() {
+    fn read_the_dummy_vault_without_fields() {
         let raw = include_bytes!("vault_from_dummy_account.bin");
         let should_be = Vault {
             version: 12,
@@ -763,9 +779,105 @@ mod tests {
                 },
             ]
         };
-        let (decryption_key, private_key) = keys();
+        let (decryption_key, private_key) = keys(RAW_KEY_01);
 
         let got = parse(raw, &decryption_key, &private_key).unwrap();
+
+        assert_eq!(got, should_be);
+    }
+
+    #[test]
+    fn read_the_dummy_vault_with_fields() {
+        let raw = include_bytes!("vault_from_dummy_account_2.bin");
+        let should_be = Vault {
+            version: 20,
+            local: false,
+            accounts: vec![
+                Account {
+                    id: Id::from("6034748985482010004"),
+                    name: String::from("Some password with fields"),
+                    group: String::new(),
+                    // Lastpass assumes http if no scheme given
+                    url: Url::parse("http://example.com").unwrap(),
+                    note: String::from("Note here"),
+                    note_type: String::new(),
+                    favourite: false,
+                    username: String::from("test.username"),
+                    password: String::from("test.password"),
+                    password_protected: false,
+                    encrypted_attachment_key: String::new(),
+                    attachment_present: false,
+                    last_touch: String::from("1627824265"),
+                    last_modified: String::from("1627824269"),
+                    attachments: Vec::new(),
+                    fields: vec![
+                        Field {
+                            name: String::from("Field1"),
+                            field_type: String::from("text"),
+                            checked: false,
+                            value: String::from("Text Val"),
+                        },
+                        Field {
+                            name: String::from("Field2"),
+                            field_type: String::from("text"),
+                            checked: false,
+                            value: String::new(),
+                        },
+                        Field {
+                            name: String::from("CheckedField"),
+                            field_type: String::from("checkbox"),
+                            checked: true,
+                            value: String::new(),
+                        },
+                        Field {
+                            name: String::from("PSWField"),
+                            field_type: String::from("password"),
+                            checked: false,
+                            value: String::from("Password"),
+                        },
+                        Field {
+                            name: String::from("SelectField"),
+                            field_type: String::from("select"),
+                            checked: false,
+                            value: String::from("select1"),
+                        },
+                        Field {
+                            name: String::from("BIG TEXT FIELD"),
+                            field_type: String::from("text"),
+                            checked: false,
+                            value: String::from(
+                                "test testtest test tes test set setes ",
+                            ),
+                        },
+                    ],
+                },
+                Account {
+                    id: Id::from("206038515839830177"),
+                    name: String::from("Psw After Fields"),
+                    group: String::new(),
+                    url: Url::parse("https://accounts.google.com/").unwrap(),
+                    note: String::new(),
+                    note_type: String::new(),
+                    favourite: false,
+                    username: String::from("uname"),
+                    password: String::from("psw"),
+                    password_protected: false,
+                    encrypted_attachment_key: String::new(),
+                    attachment_present: false,
+                    last_touch: String::from("1627840045"),
+                    last_modified: String::from("1627825645"),
+                    attachments: Vec::new(),
+                    fields: Vec::new(),
+                },
+            ],
+        };
+
+        let (decryption_key, private_key) = keys(RAW_KEY_02);
+
+        let got = parse(raw, &decryption_key, &private_key).unwrap();
+
+        println!("Other vault\n {:#?}", got);
+        println!("Other vault\n {:#?}", should_be);
 
         assert_eq!(got, should_be);
     }
