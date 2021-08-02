@@ -278,7 +278,7 @@ pub(crate) fn parse_share(
     // let _ = buffer;
 
     unimplemented!(
-        "TODO: Implement this when I share a password with someone.\n\nBuffer: {:?}",
+        "TODO: Implement this when I share a password with someone.\n\nBuffer: \n{:?}",
         buffer,
     )
 }
