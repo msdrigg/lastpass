@@ -26,7 +26,11 @@ pub(crate) fn parse(
         let mut file = File::create("vault.bin").unwrap();
         // Write a slice of bytes to the file
         file.write_all(raw).unwrap();
-        println!("DECRYPTION KEY: {:?}", decryption_key);
+        println!(
+            "DECRYPTION KEY: {:#?}",
+            hex::encode(decryption_key.as_ref())
+        );
+        println!("PRIVATE KEY: {:#?}", hex::encode(private_key.0.clone()));
     }
 
     parser.parse(raw, decryption_key, private_key)?;

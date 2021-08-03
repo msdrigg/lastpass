@@ -5,10 +5,12 @@ use std::{
 
 /// A private key that can be used to decrypt items in the password vault.
 #[derive(Clone, PartialEq)]
-pub struct PrivateKey(Vec<u8>);
+pub struct PrivateKey(pub Vec<u8>);
 
 impl PrivateKey {
-    pub fn new<V: Into<Vec<u8>>>(key: V) -> Self { PrivateKey(key.into()) }
+    pub fn new<V: Into<Vec<u8>>>(key: V) -> Self {
+        PrivateKey(key.into())
+    }
 }
 
 impl FromStr for PrivateKey {
