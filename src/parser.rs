@@ -103,7 +103,14 @@ impl Parser {
     ) -> Result<(), VaultParseError> {
         while let Some((chunk, rest)) = Chunk::parse(buffer) {
             buffer = rest;
-            self.handle_chunk(chunk, decryption_key, private_key)?;
+
+            // If we are currently processing a share, we use the key from the share
+            let used_decryption_key = match self.shares.last() {
+                Some(share) => share.key,
+                None => *decryption_key,
+            };
+
+            self.handle_chunk(chunk, &used_decryption_key, private_key)?;
         }
 
         Ok(())
@@ -150,8 +157,12 @@ impl Parser {
         buffer: &[u8],
         decryption_key: &DecryptionKey,
     ) -> Result<(), VaultParseError> {
-        self.accounts.push(parse_account(buffer, decryption_key)?);
+        let mut account = parse_account(buffer, decryption_key)?;
+        if let Some(share) = self.shares.last() {
+            account.share_id = Some(share.id.clone());
+        }
 
+        self.accounts.push(account);
         Ok(())
     }
 
@@ -270,17 +281,55 @@ pub(crate) fn parse_app(
 
 pub(crate) fn parse_share(
     buffer: &[u8],
-    _private_key: &PrivateKey,
+    private_key: &PrivateKey,
 ) -> Result<Share, VaultParseError> {
-    // let (id, buffer) = read_parsed(buffer, "share.id")?;
-    // let (key, buffer) = read_hex(buffer, "share")?;
-    //
-    // let _ = buffer;
+    let (id, buffer) = read_parsed(buffer, "share.id")?;
+    let (key_encrypted, buffer) = read_hex(buffer, "share.key")?;
+    // let key_bytes: [u8; DecryptionKey::LEN] = key
+    //     .as_slice()
+    //     .try_into()
+    //     .map_err(|e| VaultParseError::BadParse {
+    //         field: "share.key",
+    //         inner: Box::new(e),
+    //     })?;
+    log::debug!("Private Key: {:?}", key_encrypted);
+    log::debug!("Private Key Length: {:?}", key_encrypted.len());
+    let decrypted =
+        private_key.decrypt(key_encrypted.as_slice()).map_err(|e| {
+            VaultParseError::UnableToDecrypt {
+                field: "share.key",
+                inner: e,
+            }
+        })?;
 
-    unimplemented!(
-        "TODO: Implement this when I share a password with someone.\n\nBuffer: \n{:?}",
-        buffer,
-    )
+    let decrypted_string = String::from_utf8(decrypted).map_err(|e| {
+        VaultParseError::BadParse {
+            field: "share.key",
+            inner: Box::new(e),
+        }
+    })?;
+    log::debug!("Share Key: {:?}", decrypted_string);
+    log::debug!("Share Key Length: {:?}", decrypted_string.len());
+    log::debug!("Share should be len: {}", DecryptionKey::LEN);
+
+    let decryption_key: DecryptionKey =
+        DecryptionKey::from_hex(decrypted_string).map_err(|e| {
+            VaultParseError::BadParse {
+                field: "share.key",
+                inner: Box::new(e),
+            }
+        })?;
+
+    let (name, buffer) = read_encrypted(buffer, "share.name", &decryption_key)?;
+
+    let (readonly, _buffer) = read_bool(buffer, "share.readonly")?;
+
+    Ok(Share {
+        id,
+        name,
+        key: decryption_key,
+        readonly,
+    })
 }
 
 pub(crate) fn parse_attachment(
@@ -402,6 +451,7 @@ pub(crate) fn parse_account(
         })?,
         attachments: Vec::new(),
         fields: Vec::new(),
+        share_id: None,
     })
 }
 
@@ -604,24 +654,22 @@ mod tests {
         0x4C, 0x50, 0x41, 0x56, 0x00, 0x00, 0x00, 0x03, 0x31, 0x39, 0x38,
     ];
 
-    const RAW_KEY_01: &str =
+    const DECRYPTION_KEY_HEX_NEW: &str =
         "08c9bb2d9b48b39efb774e3fef32a38cb0d46c5c6c75f7f9d65259bfd374e120";
 
-    const RAW_KEY_02: &str =
-        "5440251a4ca70b772efba80ab4372e973ee00a8a2340f22b48f5efb569565d4b";
+    const DECRYPTION_KEY_NEW: &str =
+        "6613202bda71fa40fcb6253ba0b462466c118a0d779fcca5993c226150403dfb";
 
-    fn keys(raw_key: &str) -> (DecryptionKey, PrivateKey) {
-        // this is the decryption key used for the
-        // `vault_from_dummy_account.bin` vault. Having it in git isn't
-        // really a security concern because that's a dummy account and
-        // the password has since been changed.
-        let mut buffer = [0; DecryptionKey::LEN];
-        hex::decode_to_slice(raw_key, &mut buffer).unwrap();
-        let decryption_key = DecryptionKey::from_raw(buffer);
+    const PRIVATE_KEY_NEW: &str =
+        include_str!("vault_with_complex_accounts_key.txt");
 
-        let private_key = PrivateKey::new(Vec::new());
-
-        (decryption_key, private_key)
+    fn random_private_key() -> PrivateKey {
+        use rand::rngs::OsRng;
+        let mut rng = OsRng;
+        let bits = 2048;
+        let private_key = rsa::RsaPrivateKey::new(&mut rng, bits)
+            .expect("failed to generate a key");
+        PrivateKey::from_rsa(private_key)
     }
 
     #[test]
@@ -651,11 +699,12 @@ mod tests {
                 .unwrap();
             buffer.write_all(chunk.data).unwrap();
         }
-        let (decryption_key, private_key) = keys(RAW_KEY_01);
+        let decryption_key =
+            DecryptionKey::from_hex(DECRYPTION_KEY_HEX_NEW).unwrap();
         let mut parser = Parser::new();
 
         parser
-            .parse(&buffer, &decryption_key, &private_key)
+            .parse(&buffer, &decryption_key, &random_private_key())
             .unwrap();
 
         assert_eq!(parser.vault_version, Some(198));
@@ -663,7 +712,7 @@ mod tests {
 
     #[test]
     fn read_the_dummy_vault_without_fields() {
-        let raw = include_bytes!("vault_from_dummy_account.bin");
+        let raw = include_bytes!("vault_with_general_accounts.bin");
         let should_be = Vault {
             version: 12,
             local: false,
@@ -685,6 +734,7 @@ mod tests {
                     last_modified: String::from("1586717585"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("8852885818375729232"),
@@ -703,6 +753,7 @@ mod tests {
                     last_modified: String::from("1586717558"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("8994685833508535250"),
@@ -721,6 +772,7 @@ mod tests {
                     last_modified: String::from("1586717569"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("7483661148987913660"),
@@ -739,6 +791,7 @@ mod tests {
                     last_modified: String::from("1586717578"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("5211400216940069976"),
@@ -757,6 +810,7 @@ mod tests {
                     last_modified: String::from("1586717700"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("533903346832032070"),
@@ -784,19 +838,21 @@ mod tests {
                         },
                     ],
                     fields: Vec::new(),
+                    share_id: None,
                 },
             ]
         };
-        let (decryption_key, private_key) = keys(RAW_KEY_01);
+        let decryption_key = DecryptionKey::from_str(DECRYPTION_KEY_HEX_NEW)
+            .expect("Decryption key to parse");
 
-        let got = parse(raw, &decryption_key, &private_key).unwrap();
+        let got = parse(raw, &decryption_key, &random_private_key()).unwrap();
 
         assert_eq!(got, should_be);
     }
 
     #[test]
     fn read_the_dummy_vault_with_fields() {
-        let raw = include_bytes!("vault_from_dummy_account_2.bin");
+        let raw = include_bytes!("vault_with_complex_accounts.bin");
         let should_be = Vault {
             version: 28,
             local: false,
@@ -870,6 +926,7 @@ mod tests {
                             value: String::from("select2"),
                         },
                     ],
+                    share_id: None,
                 },
                 Account {
                     id: Id::from("206038515839830177"),
@@ -888,11 +945,14 @@ mod tests {
                     last_modified: String::from("1627825645"),
                     attachments: Vec::new(),
                     fields: Vec::new(),
+                    share_id: None,
                 },
             ],
         };
 
-        let (decryption_key, private_key) = keys(RAW_KEY_02);
+        let decryption_key =
+            DecryptionKey::from_hex(DECRYPTION_KEY_NEW).unwrap();
+        let private_key = PrivateKey::from_str(PRIVATE_KEY_NEW).unwrap();
 
         let got = parse(raw, &decryption_key, &private_key).unwrap();
 

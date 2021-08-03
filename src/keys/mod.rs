@@ -14,6 +14,7 @@ pub use private_key::PrivateKey;
 
 /// Errors that are returned when decryption fails.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum DecryptionError {
     #[error("The key isn't valid")]
     InvalidKey(#[from] block_modes::InvalidKeyIvLength),
@@ -23,4 +24,6 @@ pub enum DecryptionError {
     Base64(#[from] base64::DecodeError),
     #[error("Unable to create a key from its hex representation")]
     Hex(#[from] hex::FromHexError),
+    #[error("Unable to decrypt from rsa")]
+    RsaDecryptionFailed(#[from] rsa::errors::Error),
 }

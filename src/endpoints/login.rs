@@ -46,7 +46,7 @@ fn interpret_response(response: Root) -> Result<Session, LoginError> {
             log::error!("Login failed with {}: {}", err.cause, err.message);
 
             Err(LoginError::from(err))
-        },
+        }
         Root::Ok {
             uid,
             token,
@@ -63,7 +63,7 @@ fn interpret_response(response: Root) -> Result<Session, LoginError> {
                 private_key,
                 session_id,
             })
-        },
+        }
     }
 }
 

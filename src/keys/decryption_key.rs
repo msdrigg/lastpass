@@ -111,7 +111,7 @@ impl DecryptionKey {
     }
 }
 
-fn uses_cbc(ciphertext: &[u8]) -> bool {
+pub(super) fn uses_cbc(ciphertext: &[u8]) -> bool {
     ciphertext.len() >= 33
         && ciphertext.len() % 16 == 1
         && ciphertext.starts_with(b"!")
