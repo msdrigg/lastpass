@@ -11,6 +11,7 @@ const KDF_HASH_LEN: usize = SHA256_LEN;
 pub use decryption_key::DecryptionKey;
 pub use login_key::LoginKey;
 pub use private_key::PrivateKey;
+pub use private_key::PrivateKeyParseError;
 
 /// Errors that are returned when decryption fails.
 #[derive(Debug, thiserror::Error)]

@@ -1,5 +1,6 @@
 use crate::{
     keys::{DecryptionKey, PrivateKey},
+    utils::cipher_unbase64,
     Account, App, Attachment, DecryptionError, Field, Share, Vault,
 };
 use byteorder::{BigEndian, ByteOrder};
@@ -294,13 +295,12 @@ pub(crate) fn parse_share(
     //     })?;
     log::debug!("Private Key: {:?}", key_encrypted);
     log::debug!("Private Key Length: {:?}", key_encrypted.len());
-    let decrypted =
-        private_key.decrypt(key_encrypted.as_slice()).map_err(|e| {
-            VaultParseError::UnableToDecrypt {
-                field: "share.key",
-                inner: e,
-            }
-        })?;
+    let decrypted = private_key.decrypt(&key_encrypted).map_err(|e| {
+        VaultParseError::UnableToDecrypt {
+            field: "share.key",
+            inner: e,
+        }
+    })?;
 
     let decrypted_string = String::from_utf8(decrypted).map_err(|e| {
         VaultParseError::BadParse {
@@ -308,26 +308,41 @@ pub(crate) fn parse_share(
             inner: Box::new(e),
         }
     })?;
-    log::debug!("Share Key: {:?}", decrypted_string);
-    log::debug!("Share Key Length: {:?}", decrypted_string.len());
-    log::debug!("Share should be len: {}", DecryptionKey::LEN);
 
-    let decryption_key: DecryptionKey =
-        DecryptionKey::from_hex(decrypted_string).map_err(|e| {
-            VaultParseError::BadParse {
-                field: "share.key",
-                inner: Box::new(e),
-            }
+    let key: DecryptionKey = DecryptionKey::from_hex(decrypted_string)
+        .map_err(|e| VaultParseError::BadParse {
+            field: "share.key",
+            inner: Box::new(e),
         })?;
 
-    let (name, buffer) = read_encrypted(buffer, "share.name", &decryption_key)?;
+    let (name_encrypted_b64, buffer) = read_str_item(buffer, "share.name")?;
+
+    let name_encrypted = cipher_unbase64(name_encrypted_b64).ok_or(
+        VaultParseError::BadParse {
+            field: "share.name",
+            inner: "Error parsing base64 key".into(),
+        },
+    )?;
+    let name_bytes = key.decrypt(&name_encrypted).map_err(|e| {
+        VaultParseError::UnableToDecrypt {
+            field: "share.name",
+            inner: e,
+        }
+    })?;
+
+    let name = std::str::from_utf8(&name_bytes)
+        .map_err(|e| VaultParseError::BadParse {
+            field: "share.name",
+            inner: Box::new(e),
+        })?
+        .to_string();
 
     let (readonly, _buffer) = read_bool(buffer, "share.readonly")?;
 
     Ok(Share {
         id,
         name,
-        key: decryption_key,
+        key,
         readonly,
     })
 }
@@ -654,10 +669,10 @@ mod tests {
         0x4C, 0x50, 0x41, 0x56, 0x00, 0x00, 0x00, 0x03, 0x31, 0x39, 0x38,
     ];
 
-    const DECRYPTION_KEY_HEX_NEW: &str =
+    const DECRYPTION_KEY_HEX_OLD: &str =
         "08c9bb2d9b48b39efb774e3fef32a38cb0d46c5c6c75f7f9d65259bfd374e120";
 
-    const DECRYPTION_KEY_NEW: &str =
+    const DECRYPTION_KEY_HEX_NEW: &str =
         "6613202bda71fa40fcb6253ba0b462466c118a0d779fcca5993c226150403dfb";
 
     const PRIVATE_KEY_NEW: &str =
@@ -700,7 +715,7 @@ mod tests {
             buffer.write_all(chunk.data).unwrap();
         }
         let decryption_key =
-            DecryptionKey::from_hex(DECRYPTION_KEY_HEX_NEW).unwrap();
+            DecryptionKey::from_hex(DECRYPTION_KEY_HEX_OLD).unwrap();
         let mut parser = Parser::new();
 
         parser
@@ -842,7 +857,7 @@ mod tests {
                 },
             ]
         };
-        let decryption_key = DecryptionKey::from_str(DECRYPTION_KEY_HEX_NEW)
+        let decryption_key = DecryptionKey::from_str(DECRYPTION_KEY_HEX_OLD)
             .expect("Decryption key to parse");
 
         let got = parse(raw, &decryption_key, &random_private_key()).unwrap();
@@ -872,7 +887,7 @@ mod tests {
                     encrypted_attachment_key: String::new(),
                     attachment_present: false,
                     last_touch: String::from("1627824265"),
-                    last_modified: String::from("1627824269"),
+                    last_modified: String::from("1627872814"),
                     attachments: Vec::new(),
                     fields: vec![
                         Field {
@@ -930,7 +945,7 @@ mod tests {
                 },
                 Account {
                     id: Id::from("206038515839830177"),
-                    name: String::from("Psw After Fields"),
+                    name: String::from("PasswordWithChecks"),
                     group: String::new(),
                     url: Url::parse("https://accounts.google.com/").unwrap(),
                     note: String::new(),
@@ -951,8 +966,10 @@ mod tests {
         };
 
         let decryption_key =
-            DecryptionKey::from_hex(DECRYPTION_KEY_NEW).unwrap();
-        let private_key = PrivateKey::from_str(PRIVATE_KEY_NEW).unwrap();
+            DecryptionKey::from_hex(DECRYPTION_KEY_HEX_NEW).unwrap();
+        let private_key =
+            PrivateKey::from_encrypted_der(PRIVATE_KEY_NEW, decryption_key)
+                .unwrap();
 
         let got = parse(raw, &decryption_key, &private_key).unwrap();
 

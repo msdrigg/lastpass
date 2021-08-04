@@ -77,6 +77,10 @@ impl DecryptionKey {
         DecryptionKey::from_raw(key)
     }
 
+    pub(super) fn get_key_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
     pub fn decrypt(
         &self,
         ciphertext: &[u8],
