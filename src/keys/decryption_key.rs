@@ -77,6 +77,7 @@ impl DecryptionKey {
         DecryptionKey::from_raw(key)
     }
 
+    /// Used internally to decrypt the private key
     pub(super) fn get_key_bytes(&self) -> &[u8] {
         &self.0
     }

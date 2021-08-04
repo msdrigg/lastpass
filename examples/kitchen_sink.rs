@@ -6,7 +6,6 @@ use structopt::StructOpt;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
-    // let args = Args::from_args();
     let args = Args::from_args();
 
     log::debug!("Starting application with {:#?}", args);

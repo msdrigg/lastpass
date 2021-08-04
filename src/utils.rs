@@ -1,3 +1,7 @@
+/// Used for specific parsing of shares and private keys
+///
+/// `val` is either standard base64 or it is of the form
+/// '!<b64-encoded-iv>|<b64-encoded-key-data>'
 pub(crate) fn cipher_unbase64(val: &str) -> Option<Vec<u8>> {
     if val.bytes().nth(0) != Some(b'!') {
         return base64::decode(val).ok();

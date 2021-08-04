@@ -72,6 +72,9 @@ impl PrivateKey {
     }
 }
 
+/// Used to indicate the private key parse error
+/// This is different from general vault parse error
+/// because it has many more varied errors
 #[derive(Debug, thiserror::Error)]
 pub enum PrivateKeyParseError {
     #[error("Decryption failed")]

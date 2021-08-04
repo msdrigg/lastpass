@@ -286,15 +286,6 @@ pub(crate) fn parse_share(
 ) -> Result<Share, VaultParseError> {
     let (id, buffer) = read_parsed(buffer, "share.id")?;
     let (key_encrypted, buffer) = read_hex(buffer, "share.key")?;
-    // let key_bytes: [u8; DecryptionKey::LEN] = key
-    //     .as_slice()
-    //     .try_into()
-    //     .map_err(|e| VaultParseError::BadParse {
-    //         field: "share.key",
-    //         inner: Box::new(e),
-    //     })?;
-    log::debug!("Private Key: {:?}", key_encrypted);
-    log::debug!("Private Key Length: {:?}", key_encrypted.len());
     let decrypted = private_key.decrypt(&key_encrypted).map_err(|e| {
         VaultParseError::UnableToDecrypt {
             field: "share.key",
@@ -669,6 +660,10 @@ mod tests {
         0x4C, 0x50, 0x41, 0x56, 0x00, 0x00, 0x00, 0x03, 0x31, 0x39, 0x38,
     ];
 
+    // These are the decryption keys used for the
+    // dummy vaults. Having them in git isn't
+    // really a security concern because that's a dummy account and
+    // the password has since been changed.
     const DECRYPTION_KEY_HEX_OLD: &str =
         "08c9bb2d9b48b39efb774e3fef32a38cb0d46c5c6c75f7f9d65259bfd374e120";
 
