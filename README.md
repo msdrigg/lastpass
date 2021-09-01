@@ -18,6 +18,7 @@ An unofficial interface to the LastPass API based on the
 - [x] Logout
 
 - The Password Vault
+
   - [x] Fetch the vault version number (used to allow caching a vault and
         cache invalidation)
   - [x] Retrieve a copy of the vault
@@ -26,23 +27,32 @@ An unofficial interface to the LastPass API based on the
     - [x] Account fields
     - [x] Attachment metadata
     - [x] Shared items
-    - [x] The *Is Local* flag
+    - [x] The _Is Local_ flag
     - [ ] App info
-    - [ ] Equivalent Domains
+    - [x] Equivalent Domains
     - [ ] URL Rules
+    - [ ] TOTP items
+    - [ ] Trusted Devices
     - [ ] More detailed account information
 
 - Account Management
+
   - [ ] Change details (name, username, notes, etc.)
   - [ ] Create a new account
   - [ ] Delete an account
 
+- General management
+
+  - [ ] Change Account Settings
+  - [ ] Change User Info (Email/Password)
+
 - Attachments
-    - [x] Download the attachment
-    - [x] Decrypt it
-    - [ ] Upload new versions of an existing attachment
-    - [ ] Add an attachment to an account
-    - [ ] Remove an attachment from an account
+
+  - [x] Download the attachment
+  - [x] Decrypt it
+  - [ ] Upload new versions of an existing attachment
+  - [ ] Add an attachment to an account
+  - [ ] Remove an attachment from an account
 
 - [x] Generate a new password
 
@@ -51,7 +61,7 @@ An unofficial interface to the LastPass API based on the
 This project is considered a derived work of [lastpass-cli][upstream], and is
 therefore also licensed under GPLv2.
 
-> Copyright (C) 2020  Michael-F-Bryan <michaelfbryan@gmail.com>
+> Copyright (C) 2020 Michael-F-Bryan <michaelfbryan@gmail.com>
 >
 > This program is free software: you can redistribute it and/or modify
 > it under the terms of the GNU General Public License as published by
@@ -60,11 +70,11 @@ therefore also licensed under GPLv2.
 >
 > This program is distributed in the hope that it will be useful,
 > but WITHOUT ANY WARRANTY; without even the implied warranty of
-> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+> MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 > GNU General Public License for more details.
 >
 > You should have received a copy of the GNU General Public License
-> along with this program.  If not, see <https://www.gnu.org/licenses/>.
+> along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ### Contribution
 
@@ -74,6 +84,6 @@ trustworthiness of each of your dependencies, including this one.
 The intent of this crate is to be free of soundness bugs. The developers will
 do their best to avoid them, and welcome help in analysing and fixing them.
 
-[API Docs]: https://michael-f-bryan.github.io/lastpass
+[api docs]: https://michael-f-bryan.github.io/lastpass
 [crev]: https://github.com/crev-dev/cargo-crev
 [upstream]: https://github.com/lastpass/lastpass-cli

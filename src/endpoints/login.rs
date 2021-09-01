@@ -1,3 +1,5 @@
+use std::ops::Mul;
+
 use crate::{
     keys::{LoginKey, PrivateKey, PrivateKeyParseError},
     DecryptionKey, Session,
@@ -110,6 +112,54 @@ struct ErrorMessage {
     enabled_providers: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum MultifactorAuthentication<'a> {
+    TrustedId {
+        trusted_id: &'a str,
+    },
+    OobAuthorization,
+    #[serde(flatten)]
+    MultifactorAuthention,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Copy)]
+enum MultifactorAuthentionType {
+    GoogleAuthenticator,
+    Yubikey,
+    Sesame,
+    MicrosoftAuthenticator,
+    OutOfBand,
+}
+
+impl MultifactorAuthentionType {
+    fn login_error_cause(&self) -> &str {
+        match self {
+            Self::GoogleAuthenticator => "googleauthrequired",
+            Self::Yubikey => "otprequired",
+            Self::Sesame => "sesameotprequired",
+            Self::MicrosoftAuthenticator => "microsoftauthrequired",
+            Self::OutOfBand => "outofbandrequired",
+        }
+    }
+
+    fn login_failure_message(&self) -> &str {
+        match self {
+            Self::GoogleAuthenticator => "googleauthfailed",
+            Self::Yubikey => "otpfailed",
+            Self::Sesame => "sesameotpfailed",
+            Self::MicrosoftAuthenticator => "microsoftauthfailed",
+            Self::OutOfBand => "multifactorresponsefailed",
+        }
+    }
+
+    fn get_post_param(&self) -> &str {
+        match self {
+            Self::Sesame => "sesameotp",
+            _ => "otp",
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 struct Data<'a> {
     xml: usize,
@@ -121,6 +171,8 @@ struct Data<'a> {
     outofbandsupported: usize,
     #[serde(rename = "uuid")]
     trusted_id: Option<&'a str>,
+    #[serde(flatten)]
+    multifactor: Option<MultifactorAuthentication<'a>>,
 }
 
 /// Possible errors that may be returned by [`login()`].

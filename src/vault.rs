@@ -1,14 +1,16 @@
 use crate::{
-    Account, Attachment, DecryptionKey, Id, PrivateKey, VaultParseError,
+    Account, Attachment, DecryptionKey, EquivalentDomain, Id, PrivateKey,
+    VaultParseError,
 };
 
 /// Information about all accessible accounts and resources.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 #[non_exhaustive]
 pub struct Vault {
     pub version: u64,
     pub local: bool,
     pub accounts: Vec<Account>,
+    pub equivalent_domains: Vec<EquivalentDomain>,
 }
 
 impl Vault {

@@ -1,0 +1,31 @@
+multi_factor_types = 
+	{
+		.name = "Google Authenticator Code",
+		.error_str = "googleauthrequired",
+		.error_failure_str = "googleauthfailed",
+		.post_var = "otp"
+	},
+	{
+		.name = "YubiKey OTP",
+		.error_str = "otprequired",
+		.error_failure_str = "otpfailed",
+		.post_var = "otp"
+	},
+	{
+		.name = "Sesame OTP",
+		.error_str = "sesameotprequired",
+		.error_failure_str = "sesameotpfailed",
+		.post_var = "sesameotp"
+	},
+	{
+		.name = "Out-of-Band OTP",
+		.error_str = "outofbandrequired",
+		.error_failure_str = "multifactorresponsefailed",
+		.post_var = "otp"
+	},
+    {
+        .name = "Microsoft Authenticator Code",
+        .error_str = "microsoftauthrequired",
+        .error_failure_str = "microsoftauthfailed",
+        .post_var = "otp"
+    }

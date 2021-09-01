@@ -1,7 +1,8 @@
 use crate::{
     keys::{DecryptionKey, PrivateKey},
     utils::cipher_unbase64,
-    Account, App, Attachment, DecryptionError, Field, Share, Vault,
+    Account, App, Attachment, DecryptionError, EquivalentDomain, Field, Id,
+    Share, Vault,
 };
 use byteorder::{BigEndian, ByteOrder};
 use std::{
@@ -11,7 +12,7 @@ use std::{
     fmt::{self, Debug, Formatter},
     str::{FromStr, Utf8Error},
 };
-use url::Url;
+use url::{Host, Url};
 
 pub(crate) fn parse(
     raw: &[u8],
@@ -26,6 +27,7 @@ pub(crate) fn parse(
         vault_version,
         accounts,
         local,
+        equivalent_domains,
         ..
     } = parser;
     let version = unwrap_or_missing_field(vault_version, "vault_version")?;
@@ -34,6 +36,7 @@ pub(crate) fn parse(
         version,
         accounts,
         local,
+        equivalent_domains,
     })
 }
 
@@ -88,6 +91,7 @@ struct Parser {
     accounts: Vec<Account>,
     shares: Vec<Share>,
     app: Option<App>,
+    equivalent_domains: Vec<EquivalentDomain>,
     local: bool,
 }
 
@@ -147,6 +151,7 @@ impl Parser {
             b"ACFL" | b"ACOF" => {
                 self.handle_field(chunk.data, decryption_key)?
             }
+            b"EQDN" => self.handle_equivalent_domain(chunk.data)?,
             _ => {}
         }
 
@@ -189,6 +194,27 @@ impl Parser {
                 })
             }
         }
+
+        Ok(())
+    }
+
+    fn handle_equivalent_domain(
+        &mut self,
+        buffer: &[u8],
+    ) -> Result<(), VaultParseError> {
+        let (id, host) = parse_equiavlent_domain(buffer)?;
+
+        match self
+            .equivalent_domains
+            .iter_mut()
+            .find(|domain| domain.id == id)
+        {
+            Some(equiv_domain) => equiv_domain.hosts.push(host),
+            None => self.equivalent_domains.push(EquivalentDomain {
+                id,
+                hosts: vec![host],
+            }),
+        };
 
         Ok(())
     }
@@ -238,6 +264,22 @@ impl Parser {
 
         Ok(())
     }
+}
+
+fn parse_equiavlent_domain(
+    buffer: &[u8],
+) -> Result<(Id, Host), VaultParseError> {
+    // TODO:  Parse url and combine it with other urls (same id) if there are some available
+    let (id, buffer) = read_parsed(buffer, "equivalent_domain.id")?;
+    let (url_str, _) = read_hex_string(buffer, "equivalent_domain.url")?;
+    let host =
+        Host::parse(&url_str).map_err(|e| VaultParseError::BadParse {
+            field: "equivalent_domain.url",
+            inner: Box::new(e),
+        })?;
+    // println!("Id: \n{:#?}", id);
+    // println!("HexStr: \n{:#?}", item_string);
+    Ok((id, host))
 }
 
 pub(crate) fn parse_app(
@@ -851,7 +893,12 @@ mod tests {
                     fields: Vec::new(),
                     share_id: None,
                 },
-            ]
+            ],
+            /// This account was created before the kfc.com equivalent domain was added as default
+            equivalent_domains: EquivalentDomain::list_default()
+                .into_iter()
+                .filter(|domain| domain.id != Id::from("2326"))
+                .collect(),
         };
         let decryption_key = DecryptionKey::from_str(DECRYPTION_KEY_HEX_OLD)
             .expect("Decryption key to parse");
@@ -997,6 +1044,7 @@ mod tests {
                     share_id: Some(Id::from("391429291")),
                 },
             ],
+            equivalent_domains: EquivalentDomain::list_default(),
         };
 
         let decryption_key =

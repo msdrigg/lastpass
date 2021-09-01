@@ -1,12 +1,33 @@
+use std::{
+    fs::File,
+    io::{self, BufRead},
+    path::Path,
+};
+
 use anyhow::Error;
 use lastpass::{endpoints, DecryptionKey, LoginKey};
 use reqwest::Client;
 use structopt::StructOpt;
 
+// The output is wrapped in a Result to allow matching on errors
+// Returns an Iterator to the Reader of the lines of the file.
+fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
+where
+    P: AsRef<Path>,
+{
+    let file = File::open(filename)?;
+    Ok(io::BufReader::new(file).lines())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     env_logger::init();
-    let args = Args::from_args();
+    let args = if let Ok(lines) = read_lines("Equiv_domains_default") {
+        // Consumes the iterator, returns an (Optional) String
+        Args::from_iter(lines.into_iter().filter_map(|it| it.ok()))
+    } else {
+        Args::from_args()
+    };
 
     log::debug!("Starting application with {:#?}", args);
 
